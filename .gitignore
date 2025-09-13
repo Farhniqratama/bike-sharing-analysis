@@ -1,1 +1,13 @@
+# OS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python env
 venv/
+.venv/
+
+# Bytecode
+__pycache__/
+*.pyc
