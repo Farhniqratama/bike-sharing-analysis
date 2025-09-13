@@ -33,7 +33,7 @@ def load_data():
             continue
 
     raise FileNotFoundError(
-        f"Tidak dapat memuat data. Pastikan berkas 'data/day.csv' dan 'data/hour.csv' tersedia. "
+        "Tidak dapat memuat data. Pastikan berkas 'data/day.csv' dan 'data/hour.csv' tersedia. "
         f"Error terakhir: {last_err}"
     )
 
@@ -89,51 +89,63 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
 day_f = apply_filters(day.copy())
 hour_f = apply_filters(hour.copy())
 
-if day_f.empty or hour_f.empty:
-    st.warning("⚠️ Filter saat ini menghasilkan dataset kosong. Ubah filter di sidebar.")
-    st.stop()
-
-# --- KPI
+# --- KPI (aman saat kosong)
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total Rentals (daily)", int(day_f["cnt"].sum()))
-c2.metric("Avg Rentals / Day", round(float(day_f["cnt"].mean()), 2))
-c3.metric("Max Rentals / Day", int(day_f["cnt"].max()))
-c4.metric("Records", int(len(day_f)))
+if not day_f.empty:
+    c1.metric("Total Rentals (daily)", int(day_f["cnt"].sum()))
+    c2.metric("Avg Rentals / Day", round(float(day_f["cnt"].mean()), 2))
+    c3.metric("Max Rentals / Day", int(day_f["cnt"].max()))
+    c4.metric("Records", int(len(day_f)))
+else:
+    c1.metric("Total Rentals (daily)", "N/A")
+    c2.metric("Avg Rentals / Day", "N/A")
+    c3.metric("Max Rentals / Day", "N/A")
+    c4.metric("Records", 0)
+    st.warning("⚠️ Dataset harian kosong karena filter. Ubah filter di sidebar untuk melihat grafik di bawah.")
 
 # --- Chart 1: Hourly demand
 st.subheader("Hourly Demand Pattern")
-hourly = hour_f.groupby("hr", as_index=False)["cnt"].mean().sort_values("hr")
-fig1, ax1 = plt.subplots()
-ax1.plot(hourly["hr"], hourly["cnt"])
-ax1.set_xlabel("Hour (0–23)")
-ax1.set_ylabel("Avg Rentals")
-ax1.set_title("Average Rentals by Hour")
-ax1.set_ylim(bottom=0)  # integritas visual
-st.pyplot(fig1)
+if not hour_f.empty and "hr" in hour_f.columns:
+    hourly = hour_f.groupby("hr", as_index=False)["cnt"].mean().sort_values("hr")
+    fig1, ax1 = plt.subplots()
+    ax1.plot(hourly["hr"], hourly["cnt"])
+    ax1.set_xlabel("Hour (0–23)")
+    ax1.set_ylabel("Avg Rentals")
+    ax1.set_title("Average Rentals by Hour")
+    ax1.set_ylim(bottom=0)
+    st.pyplot(fig1)
+else:
+    st.info("Data hourly kosong untuk filter saat ini.")
 
 # --- Chart 2: Daily by season
 st.subheader("Daily Demand by Season")
-season_daily = (
-    day_f.groupby("season_name", as_index=False)["cnt"]
-        .mean().sort_values("cnt", ascending=False)
-)
-fig2, ax2 = plt.subplots()
-ax2.bar(season_daily["season_name"].astype(str), season_daily["cnt"])
-ax2.set_xlabel("Season")
-ax2.set_ylabel("Average Daily Rentals")
-ax2.set_title("Average Daily Rentals by Season")
-ax2.set_ylim(bottom=0)
-st.pyplot(fig2)
+if not day_f.empty:
+    season_daily = (
+        day_f.groupby("season_name", as_index=False)["cnt"]
+             .mean().sort_values("cnt", ascending=False)
+    )
+    if not season_daily.empty:
+        fig2, ax2 = plt.subplots()
+        ax2.bar(season_daily["season_name"].astype(str), season_daily["cnt"])
+        ax2.set_xlabel("Season")
+        ax2.set_ylabel("Average Daily Rentals")
+        ax2.set_title("Average Daily Rentals by Season")
+        ax2.set_ylim(bottom=0)
+        st.pyplot(fig2)
+    else:
+        st.info("Tidak ada ringkasan musiman untuk filter saat ini.")
+else:
+    st.info("Data harian kosong untuk ringkasan musiman.")
 
 # --- Chart 3: Korelasi
 st.subheader("Correlation with Total Rentals (Daily)")
 corr_cols = ["temp", "atemp", "hum", "windspeed", "casual", "registered", "cnt"]
 available = [c for c in corr_cols if c in day_f.columns]
-if "cnt" not in available:
-    st.error("Kolom 'cnt' tidak ditemukan pada data harian terfilter.")
-else:
+if not day_f.empty and "cnt" in available:
     corr_series = day_f[available].corr(numeric_only=True)["cnt"].sort_values(ascending=False)
     st.dataframe(corr_series.to_frame("corr_with_cnt"))
+else:
+    st.info("Tidak bisa menghitung korelasi karena data harian kosong atau kolom 'cnt' tidak tersedia.")
 
 # --- Download data terfilter
 st.divider()
